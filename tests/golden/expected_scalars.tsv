@@ -1,0 +1,14 @@
+bal_small	roc-auc	0x1.6666666666666p-1
+bal_small	average-precision	0x1.7367367367368p-1
+bal_mid	roc-auc	0x1.4b04d6269351fp-1
+bal_mid	average-precision	0x1.3cfaaf8f513fdp-1
+imb_mid	roc-auc	0x1.2ab6b0480756bp-1
+imb_mid	average-precision	0x1.319ef3016e117p-4
+bal_noties	roc-auc	0x1.412054cda5e58p-1
+bal_noties	average-precision	0x1.2b2f909c8c2bcp-1
+imb_big	roc-auc	0x1.4295f387fbb97p-1
+imb_big	average-precision	0x1.674fb40ba2acdp-4
+allneg_small	average-precision	0x0.0p+0
+allpos_small	average-precision	0x1.0000000000000p+0
+allneg_small	roc-auc	nan
+allpos_small	roc-auc	nan
