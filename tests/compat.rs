@@ -150,6 +150,29 @@ fn pr_curves_bit_identical() {
     }
 }
 
+/// The printed strings must match scikit-learn's `repr(float)` byte-for-byte,
+/// not merely round-trip to the same value: tiny AUCs use `e` notation, `1e300`
+/// thresholds stay compact, and every `0.0`/`1.0` curve endpoint keeps its
+/// trailing `.0`. `<name>.{roc,pr}.repr` / `tiny.auc.repr` are frozen from the
+/// oracle's `repr` output.
+fn check_repr(name: &str, metric: &str, ext: &str) {
+    let want = std::fs::read_to_string(golden_dir().join(format!("{name}.{ext}"))).unwrap();
+    let path = golden_dir().join(format!("{name}.tsv"));
+    let got = run(&["--metric", metric, path.to_str().unwrap()]);
+    assert_eq!(got, want, "{name} {metric}: repr string mismatch");
+}
+
+#[test]
+fn repr_matches_python_float_repr() {
+    check_repr("perfect", "roc-curve", "roc.repr");
+    check_repr("perfect", "pr-curve", "pr.repr");
+    check_repr("huge", "roc-curve", "roc.repr");
+    check_repr("huge", "pr-curve", "pr.repr");
+    check_repr("bal_small", "roc-curve", "roc.repr");
+    check_repr("bal_small", "pr-curve", "pr.repr");
+    check_repr("tiny", "roc-auc", "auc.repr");
+}
+
 #[test]
 fn stdin_matches_file() {
     let path = golden_dir().join("bal_mid.tsv");

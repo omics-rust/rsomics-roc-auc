@@ -56,8 +56,13 @@ with and without score ties:
   the `drop_intermediate` second-difference point removal, and the reversed PR
   endpoint — checked against curves with tens of thousands of points.
 
-The compatibility test compares committed IEEE-754 hex goldens and needs no
-Python at test time.
+Every printed number matches Python's `repr(float)` character for character,
+not just to the same value: tiny scores use `e` notation (`2.5e-05`), large
+thresholds stay compact (`1e+300`), and the `0.0`/`1.0` curve endpoints keep
+their trailing `.0`.
+
+The compatibility test compares committed IEEE-754 hex goldens (values) and
+committed `repr` goldens (printed strings), and needs no Python at test time.
 
 ## Performance
 

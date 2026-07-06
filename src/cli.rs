@@ -164,24 +164,114 @@ fn write_curve<W: Write>(w: &mut W, a: &[f64], b: &[f64], thr: &[f64]) -> std::i
     Ok(())
 }
 
-/// Shortest round-trip decimal, matching Python's float repr; `inf`/`nan`
-/// spelled as scikit-learn / NumPy print them.
+/// Format a float exactly as Python's `repr(float)` prints it — which is what
+/// scikit-learn writes for every ROC/PR/AUC value. Rust's default `Display`
+/// diverges in three ways: it never switches to scientific notation (so `1e300`
+/// balloons to 301 digits and `2e-05` prints as `0.00002`), and it drops the
+/// trailing `.0` on integer-valued floats (so the `0.0`/`1.0` curve endpoints
+/// come out as `0`/`1`). We take Rust's shortest round-trip digits from `{:e}`
+/// (value-preserving) and apply CPython's presentation rule: scientific `e`
+/// notation with a signed, ≥2-digit exponent when the decimal exponent is
+/// `< -4` or `>= 16`, fixed notation otherwise, always keeping one trailing
+/// `.0` for integer-valued fixed output. `inf`/`-inf`/`nan` as Python spells
+/// them.
 fn fmt(x: f64) -> String {
+    if x.is_nan() {
+        return "nan".into();
+    }
     if x.is_infinite() {
-        if x > 0.0 { "inf".into() } else { "-inf".into() }
-    } else if x.is_nan() {
-        "nan".into()
+        return if x > 0.0 { "inf".into() } else { "-inf".into() };
+    }
+
+    let sci = format!("{x:e}");
+    let (neg, rest) = match sci.strip_prefix('-') {
+        Some(r) => (true, r),
+        None => (false, sci.as_str()),
+    };
+    let (mantissa, exp_str) = rest.split_once('e').expect("{:e} always emits an exponent");
+    let exp: i32 = exp_str.parse().expect("{:e} exponent is an integer");
+    let digits: String = mantissa.chars().filter(|&c| c != '.').collect();
+    let sign = if neg { "-" } else { "" };
+
+    if !(-4..16).contains(&exp) {
+        let m = if digits.len() == 1 {
+            digits
+        } else {
+            format!("{}.{}", &digits[..1], &digits[1..])
+        };
+        let es = if exp < 0 { '-' } else { '+' };
+        format!("{sign}{m}e{es}{:02}", exp.unsigned_abs())
     } else {
-        format!("{x}")
+        let ndigits = digits.len() as i32;
+        let decpt = exp + 1;
+        let body = if decpt <= 0 {
+            format!("0.{}{}", "0".repeat((-decpt) as usize), digits)
+        } else if decpt >= ndigits {
+            format!("{digits}{}.0", "0".repeat((decpt - ndigits) as usize))
+        } else {
+            format!(
+                "{}.{}",
+                &digits[..decpt as usize],
+                &digits[decpt as usize..]
+            )
+        };
+        format!("{sign}{body}")
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::fmt;
     use clap::CommandFactory;
 
     #[test]
     fn cli_definition_is_valid() {
         super::Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn fmt_matches_python_repr() {
+        for (x, want) in [
+            (0.0_f64, "0.0"),
+            (-0.0, "-0.0"),
+            (1.0, "1.0"),
+            (2.0, "2.0"),
+            (0.5, "0.5"),
+            (1.1, "1.1"),
+            (12.34, "12.34"),
+            (1234.5, "1234.5"),
+            (100.0, "100.0"),
+            (0.6666666666666666, "0.6666666666666666"),
+            (0.001, "0.001"),
+            (0.0001, "0.0001"),
+            (0.00001, "1e-05"),
+            (1e-8, "1e-08"),
+            (2.999999999997449e-05, "2.999999999997449e-05"),
+            (2.0000000000020002e-05, "2.0000000000020002e-05"),
+            (1e15, "1000000000000000.0"),
+            (1e16, "1e+16"),
+            (1e300, "1e+300"),
+            (1e-300, "1e-300"),
+            (-1.5e20, "-1.5e+20"),
+            (-0.2, "-0.2"),
+        ] {
+            assert_eq!(fmt(x), want, "fmt({x})");
+        }
+    }
+
+    #[test]
+    fn fmt_round_trips_value() {
+        for x in [
+            0.0_f64,
+            1.0,
+            0.6666666666666666,
+            2.999999999997449e-05,
+            1e300,
+            1e-300,
+            -1.5e20,
+            std::f64::consts::PI,
+        ] {
+            assert_eq!(fmt(x).parse::<f64>().unwrap().to_bits(), x.to_bits());
+        }
     }
 }
